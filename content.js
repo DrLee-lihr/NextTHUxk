@@ -16,7 +16,7 @@ const SP = 'nextthuxk_';
 let SEM = (location.href.match(/p_xnxq=([^&]+)/) || [,''])[1];
 let GRADE = 0; // 1=大一 2=大二 3=大三 4=大四
 const BASE = location.origin;
-const DATA_VER = 2; // bump when data structure changes (e.g. adding volSports)
+const DATA_VER = 3; // bump when data structure changes
 const isZhjwxk = location.hostname === 'zhjwxk.cic.tsinghua.edu.cn';
 const isZhjw   = location.hostname === 'zhjw.cic.tsinghua.edu.cn';
 
@@ -1610,7 +1610,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.0.1';
+const CUR_VER = '1.0.2';
 let updateTimer = null;
 
 function cmpVer(a, b) {
@@ -1686,8 +1686,8 @@ async function launch() {
     // Will try to infer from plan after data loads
   }
   if (!GRADE) {
-    const g = prompt('请输入你的年级（1=大一 2=大二 3=大三 4=大四）：', '3') || '3';
-    GRADE = Math.max(1, Math.min(4, parseInt(g) || 3));
+    const g = prompt('请输入你的年级（1=大一 2=大二 3=大三 4=大四）：');
+    if (g) GRADE = Math.max(1, Math.min(4, parseInt(g) || 0));
   }
   await store.set('grade', GRADE);
   const gradeBtn = $('nextthuxk-grade');
@@ -1702,6 +1702,8 @@ async function launch() {
       console.log(TAG, 'data version mismatch, clearing cache');
       sd = null;
       await store.set('staticData', null);
+      await store.set('grade', 0); // re-detect grade
+      GRADE = 0;
     }
     const needCatalog = !sd || !sd.catalog || sd.catalog.length < 100;
 
