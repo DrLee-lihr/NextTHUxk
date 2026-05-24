@@ -1097,61 +1097,61 @@ function volColor(course) {
   return { level: 'hard', color: '#ff3b30', bg: 'rgba(255,59,48,.1)', pct: Math.min(ratio * 100, 100) };
 }
 
+function parseVolArr(s) {
+  if (!s) return null;
+  const a = s.split(',').map(Number);
+  return (a.length >= 3 && a.some(n => n > 0)) ? a : null;
+}
+
 function calcProb(course, flag, zy) {
-  // Calculate admission probability for a course at given type & volunteer level
   const cap = course.volCapacity || course.capacity || 0;
   if (!cap) return { prob: -1, label: '无数据', color: '#86868b' };
 
-  const isTy = flag === 'ty';
-  const volStr = isTy ? course.volSports : ({ bx: course.volRequired, xx: course.volElective, rx: course.volOptional }[flag]);
+  const zyIdx = zy - 1;
 
-  // Check if this type has data
-  if (!volStr) {
-    // If sports course but no sports vol data, or type mismatch
-    if (isTy && !course.volSports) return { prob: -1, label: '无数据', color: '#86868b' };
-    return { prob: -1, label: '类型不匹配', color: '#86868b' };
+  // 体育：独立级联，只看体育志愿
+  if (flag === 'ty') {
+    const vols = parseVolArr(course.volSports);
+    if (!vols) return { prob: -1, label: '无数据', color: '#86868b' };
+    if (applicantsAtLevel(vols, zyIdx) === 0) return { prob: 1, label: '100%', color: '#34c759' };
+    let rem = cap;
+    for (let i = 0; i < zyIdx; i++) rem -= vols[i];
+    return probResult(rem, vols[zyIdx]);
   }
 
-  const vols = volStr.split(',').map(Number); // [1志愿人数, 2志愿人数, 3志愿人数]
-  if (vols.length < 3) return { prob: -1, label: '无数据', color: '#86868b' };
+  // 必修/限选/任选：全局级联 必修1→必修2→必修3→限选1→限选2→限选3→任选1→任选2→任选3
+  const bxV = parseVolArr(course.volRequired);
+  const xxV = parseVolArr(course.volElective);
+  const rxV = parseVolArr(course.volOptional);
+  const typeOrder = [
+    ['bx', bxV], ['xx', xxV], ['rx', rxV],
+  ];
 
-  const zyIdx = zy - 1; // 0-indexed
-  if (zyIdx < 0 || zyIdx > 2) return { prob: -1, label: '无数据', color: '#86868b' };
-
-  // Check ZY_LIMITS: can this type+zy be used?
-  const limits = ZY_LIMITS[flag];
-  if (!limits) return { prob: -1, label: '类型不匹配', color: '#86868b' };
-  const maxAtLevel = limits[zyIdx]?.[1] || 0;
-  if (maxAtLevel === 0 && zyIdx === 0) return { prob: -1, label: '类型不匹配', color: '#86868b' };
-
-  // Cascade probability calculation:
-  // Capacity is shared across volunteer levels.
-  // Simplified model: each volunteer level gets a proportional share of capacity
-  // P(zy N) = capacity_for_zyN / applicants_at_zyN
-  // where capacity_for_zyN = max(0, cap - sum of higher-priority volunteer slots taken)
-  // A more practical model: P = cap / (applied at this level and above, weighted)
-  // Simplest reasonable model: P(zy N) = max(0, cap - sum(applicants at zy 1..N-1)) / applicants_zyN
-
-  let remainingCap = cap;
-  for (let i = 0; i < zyIdx; i++) {
-    // Higher priority volunteers take slots first
-    remainingCap -= vols[i];
+  let rem = cap;
+  for (const [tf, tv] of typeOrder) {
+    if (!tv) continue;
+    for (let i = 0; i < 3; i++) {
+      if (tf === flag && i === zyIdx) {
+        const app = tv[i];
+        if (app === 0) return { prob: 1, label: '100%', color: '#34c759' };
+        return probResult(rem, app);
+      }
+      rem -= tv[i];
+    }
   }
-  remainingCap = Math.max(0, remainingCap);
+  return { prob: -1, label: '无数据', color: '#86868b' };
+}
 
-  const applicantsAtThisLevel = vols[zyIdx];
-  if (applicantsAtThisLevel === 0) return { prob: 1, label: '100%', color: '#34c759' };
+function applicantsAtLevel(vols, idx) { return vols[idx] || 0; }
 
-  const prob = Math.min(1, remainingCap / applicantsAtThisLevel);
-
-  // Color coding
+function probResult(rem, applicants) {
+  rem = Math.max(0, rem);
+  const prob = Math.min(1, applicants === 0 ? 1 : rem / applicants);
   let color;
-  if (prob >= 0.8) color = '#34c759';      // green
-  else if (prob >= 0.5) color = '#ff9500';  // yellow/orange
-  else color = '#ff3b30';                    // red
-
-  const pctLabel = Math.round(prob * 100) + '%';
-  return { prob, label: pctLabel, color };
+  if (prob >= 0.8) color = '#34c759';
+  else if (prob >= 0.5) color = '#ff9500';
+  else color = '#ff3b30';
+  return { prob, label: Math.round(prob * 100) + '%', color };
 }
 
 // Generate full probability grid for a course showing all allowed type × zy combinations
@@ -1855,7 +1855,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.1.1';
+const CUR_VER = '1.1.2';
 let updateTimer = null;
 
 function cmpVer(a, b) {
