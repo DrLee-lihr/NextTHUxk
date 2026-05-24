@@ -4,13 +4,16 @@
 
 ## 安装
 
+> **建议使用方式二（解压加载）**。Chrome / Edge 已收紧外部 .crx 安装策略，直接拖入 .crx 可能被拦截。解压加载在所有浏览器均可正常使用。
+
 ### 方式一：.crx 拖入安装（Chrome / Arc）
 
 1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.crx`
 2. 浏览器打开 `chrome://extensions`，右上角开启「开发者模式」
 3. 将 .crx 文件拖入浏览器窗口，确认安装
+4. 若提示无法安装，请改用方式二
 
-### 方式二：解压加载（Edge 用户 / 通用）
+### 方式二：解压加载（推荐 / 所有浏览器通用）
 
 1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.zip` 并解压
 2. 浏览器打开扩展管理页（Chrome: `chrome://extensions`，Edge: `edge://extensions`），开启「开发者模式」
