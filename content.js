@@ -953,7 +953,7 @@ function renderCourses(list) {
       if (c.volOptional && c.volOptional !== '0,0,0') { const s = fmtVol(c.volOptional); if (s) volParts.push(`<span>任 ${s}</span>`); }
     }
     const volHtml = volParts.length ? `<div class="nx-vol">${volParts.join('')}</div>` : '';
-    const defFlag = courseFlag(c);
+    const defFlag = baseFlag(c);
     const volApplied = c.volApplied || 0;
     const volCap = c.volCapacity || c.capacity || 0;
     const compLabel = vc.level === 'easy' ? '竞争宽松' : vc.level === 'medium' ? '竞争适中' : vc.level === 'hard' ? '竞争激烈' : '';
@@ -963,10 +963,7 @@ function renderCourses(list) {
     </div>` : '';
     // Probability: show all allowed type × zy combinations
     let probHtml = '';
-    {
-      const bf = isSportsCourse(c) ? 'ty' : defFlag;
-      probHtml = fullProbGrid(c, bf);
-    }
+    probHtml = fullProbGrid(c, defFlag);
     const detail = [
       c.capacity ? `容量${c.capacity}` : '',
       c.remaining !== undefined ? `余${c.remaining}` : '',
@@ -1100,7 +1097,7 @@ function volColor(course) {
 function parseVolArr(s) {
   if (!s) return null;
   const a = s.split(',').map(Number);
-  return (a.length >= 3 && a.some(n => n > 0)) ? a : null;
+  return (a.length >= 3) ? a : null;
 }
 
 function calcProb(course, flag, zy) {
@@ -1855,7 +1852,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.1.2';
+const CUR_VER = '1.1.3';
 let updateTimer = null;
 
 function cmpVer(a, b) {
