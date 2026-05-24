@@ -4,20 +4,18 @@
 
 ## 安装
 
-### 方式一：.crx 一键安装（推荐）
+> **Edge 用户**请使用方式二（解压加载），Edge 会自动删除下载的 .crx 文件。
+
+### 方式一：.crx 一键安装（Chrome / Arc 推荐）
 
 1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.crx`
-2. 浏览器打开扩展管理页：
-   - Chrome / Arc：`chrome://extensions`
-   - Edge：`edge://extensions`
-   - 其他 Chromium 浏览器：`chrome://extensions`（通用）
-3. 右上角开启「开发者模式」
-4. 将 .crx 文件拖入浏览器窗口，确认安装
+2. 浏览器打开 `chrome://extensions`，右上角开启「开发者模式」
+3. 将 .crx 文件拖入浏览器窗口，确认安装
 
-### 方式二：解压加载
+### 方式二：解压加载（Edge 用户 / 通用）
 
 1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.zip` 并解压
-2. 浏览器打开扩展管理页，开启「开发者模式」
+2. 浏览器打开扩展管理页（Chrome: `chrome://extensions`，Edge: `edge://extensions`），开启「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择解压后的文件夹
 
 ## 使用

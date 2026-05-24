@@ -55,12 +55,14 @@ async function fetchPage(url, opts = {}) {
 
 // ─── §6. Data Layer ───────────────────────────────────────
 async function crossFetch(url) {
-  // Route through background service worker to bypass CORS
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'crossFetch', url }, (resp) => {
-      if (resp?.ok) resolve(resp.text);
-      else resolve(null);
-    });
+    try {
+      chrome.runtime.sendMessage({ action: 'crossFetch', url }, (resp) => {
+        if (chrome.runtime.lastError) { resolve(null); return; }
+        if (resp?.ok) resolve(resp.text);
+        else resolve(null);
+      });
+    } catch(e) { resolve(null); }
   });
 }
 
@@ -68,7 +70,12 @@ async function fetchGradeFromProfile() {
   const profileUrl = 'https://zhjw.cic.tsinghua.edu.cn/jxmh.do?url=/jxmh.do&m=bks_ShowBksXx';
   try {
     const html = await crossFetch(profileUrl);
-    if (!html) { console.log(TAG, 'profile crossFetch returned null'); return 0; }
+    if (!html) { console.log(TAG, 'profile: crossFetch failed (no zhjw session or CORS)'); return 0; }
+    // Check for OAuth redirect (login page instead of profile)
+    if (html.includes('oauth') || html.includes('login') || html.includes('Ibredirect') || html.length < 500) {
+      console.log(TAG, 'profile: got login/redirect page, zhjw session not available');
+      return 0;
+    }
     console.log(TAG, 'profile page fetched, length:', html.length, 'has 所属年级:', html.includes('所属年级'));
     if (html.includes('所属年级')) {
       const doc = new DOMParser().parseFromString(html, 'text/html');
