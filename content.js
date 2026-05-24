@@ -558,6 +558,11 @@ const CSS = `
 .nx-tt td{padding:6px 4px;text-align:center;border-radius:8px;font-size:11px;background:rgba(0,0,0,.02);vertical-align:top;min-width:0}
 .nx-tt td.nx-s{background:rgba(124,106,239,.1);color:#7c6aef;font-weight:600}
 .nx-tt td.nx-c{background:rgba(255,59,48,.1);color:#ff3b30;border:1px dashed rgba(255,59,48,.3)}
+.nx-tt-cell{position:relative}
+.nx-tt-text{display:block;font-size:10px;line-height:1.3;word-break:break-all}
+.nx-tt-rm{position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:rgba(0,0,0,.15);color:#fff;font-size:9px;line-height:14px;text-align:center;cursor:pointer;display:none}
+.nx-tt td:hover .nx-tt-rm{display:inline-block}
+.nx-tt-rm:hover{background:rgba(255,59,48,.7)}
 .nx-spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(124,106,239,.2);border-top-color:#7c6aef;border-radius:50%;animation:nxsp .6s linear infinite;vertical-align:middle}
 @keyframes nxsp{to{transform:rotate(360deg)}}
 .nx-empty{padding:40px 20px;text-align:center;color:#86868b;font-size:13px}
@@ -663,6 +668,7 @@ const HTML = `
             <input type="text" class="nx-inp" id="nextthuxk-draft-name" placeholder="草稿名称（如：方案A）" style="flex:1;padding:6px 10px;font-size:12px;min-width:120px">
             <button class="nx-stage-btn" id="nextthuxk-save-draft">💾 保存草稿</button>
             <button class="nx-stage-btn" id="nextthuxk-save-selected">📋 存当前选课</button>
+            <button class="nx-stage-btn" id="nextthuxk-preview-stage">📅 预览暂存</button>
             <button class="nx-stage-btn" id="nextthuxk-export">📤 导出</button>
             <button class="nx-stage-btn" id="nextthuxk-import">📥 导入</button>
           </div>
@@ -933,6 +939,19 @@ function renderCourses(list) {
       <div class="nx-comp-bar" style="width:${vc.pct}%;background:${vc.color}"></div>
       <span class="nx-comp-txt" style="color:${vc.color}">${volApplied}/${volCap} · ${compLabel}</span>
     </div>` : '';
+    // Probability calculation
+    let probHtml = '';
+    if (!c.selected) {
+      const pf = defFlag;
+      const pzy = 3; // default volunteer level for unselected
+      const p = calcProb(c, pf, pzy);
+      if (p.prob >= 0) probHtml = `<div style="margin-top:3px;font-size:10px;font-weight:600;color:${p.color}">中签率 ${p.label}（${pf==='bx'?'必修':pf==='xx'?'限选':pf==='rx'?'任选':'体育'} ${pzy}志愿）</div>`;
+      else if (p.label === '类型不匹配') probHtml = `<div style="margin-top:3px;font-size:10px;color:#86868b">类型不正确，无法计算</div>`;
+    } else if (c.zy) {
+      const sf = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
+      const p = calcProb(c, sf, c.zy);
+      if (p.prob >= 0) probHtml = `<div style="margin-top:3px;font-size:10px;font-weight:600;color:${p.color}">中签率 ${p.label}（第${c.zy}志愿）</div>`;
+    }
     const detail = [
       c.capacity ? `容量${c.capacity}` : '',
       c.remaining !== undefined ? `余${c.remaining}` : '',
@@ -959,7 +978,7 @@ function renderCourses(list) {
       <div class="nx-card-head"><span class="nx-card-name">${esc(c.name)}</span><span class="nx-card-credit">${c.credits}学分</span></div>
       <div style="font-size:11px;color:#86868b;margin-bottom:3px">${esc(c.code)}${c.seq?' · '+esc(c.seq)+'课序':''}</div>
       <div class="nx-tags">${tags.join('')}</div>
-      ${volHtml}${compHtml}
+      ${volHtml}${compHtml}${probHtml}
       <div class="nx-card-detail"><div class="nx-card-detail-inner">${detail}</div></div>
       <div class="nx-card-actions">
         <button class="nx-detail-btn" data-code="${esc(c.code)}" data-tid="${esc(c.teacherId||'')}">📄 简介</button>
@@ -1053,7 +1072,6 @@ function fmtVol(v) {
 }
 
 function volColor(course) {
-  // Calculate competition level based on volunteer applications vs capacity
   const cap = course.volCapacity || course.capacity || 0;
   const applied = course.volApplied || 0;
   if (!cap || cap === 0) return { level: 'unknown', color: '#86868b', bg: 'rgba(134,134,139,.08)', pct: 0 };
@@ -1061,6 +1079,63 @@ function volColor(course) {
   if (ratio <= 0.8) return { level: 'easy', color: '#34c759', bg: 'rgba(52,199,89,.1)', pct: Math.min(ratio * 100, 100) };
   if (ratio <= 1.2) return { level: 'medium', color: '#ff9500', bg: 'rgba(255,149,0,.1)', pct: Math.min(ratio * 100, 100) };
   return { level: 'hard', color: '#ff3b30', bg: 'rgba(255,59,48,.1)', pct: Math.min(ratio * 100, 100) };
+}
+
+function calcProb(course, flag, zy) {
+  // Calculate admission probability for a course at given type & volunteer level
+  const cap = course.volCapacity || course.capacity || 0;
+  if (!cap) return { prob: -1, label: '无数据', color: '#86868b' };
+
+  const isTy = flag === 'ty';
+  const volStr = isTy ? course.volSports : ({ bx: course.volRequired, xx: course.volElective, rx: course.volOptional }[flag]);
+
+  // Check if this type has data
+  if (!volStr) {
+    // If sports course but no sports vol data, or type mismatch
+    if (isTy && !course.volSports) return { prob: -1, label: '无数据', color: '#86868b' };
+    return { prob: -1, label: '类型不匹配', color: '#86868b' };
+  }
+
+  const vols = volStr.split(',').map(Number); // [1志愿人数, 2志愿人数, 3志愿人数]
+  if (vols.length < 3) return { prob: -1, label: '无数据', color: '#86868b' };
+
+  const zyIdx = zy - 1; // 0-indexed
+  if (zyIdx < 0 || zyIdx > 2) return { prob: -1, label: '无数据', color: '#86868b' };
+
+  // Check ZY_LIMITS: can this type+zy be used?
+  const limits = ZY_LIMITS[flag];
+  if (!limits) return { prob: -1, label: '类型不匹配', color: '#86868b' };
+  const maxAtLevel = limits[zyIdx]?.[1] || 0;
+  if (maxAtLevel === 0 && zyIdx === 0) return { prob: -1, label: '类型不匹配', color: '#86868b' };
+
+  // Cascade probability calculation:
+  // Capacity is shared across volunteer levels.
+  // Simplified model: each volunteer level gets a proportional share of capacity
+  // P(zy N) = capacity_for_zyN / applicants_at_zyN
+  // where capacity_for_zyN = max(0, cap - sum of higher-priority volunteer slots taken)
+  // A more practical model: P = cap / (applied at this level and above, weighted)
+  // Simplest reasonable model: P(zy N) = max(0, cap - sum(applicants at zy 1..N-1)) / applicants_zyN
+
+  let remainingCap = cap;
+  for (let i = 0; i < zyIdx; i++) {
+    // Higher priority volunteers take slots first
+    remainingCap -= vols[i];
+  }
+  remainingCap = Math.max(0, remainingCap);
+
+  const applicantsAtThisLevel = vols[zyIdx];
+  if (applicantsAtThisLevel === 0) return { prob: 1, label: '100%', color: '#34c759' };
+
+  const prob = Math.min(1, remainingCap / applicantsAtThisLevel);
+
+  // Color coding
+  let color;
+  if (prob >= 0.8) color = '#34c759';      // green
+  else if (prob >= 0.5) color = '#ff9500';  // yellow/orange
+  else color = '#ff3b30';                    // red
+
+  const pctLabel = Math.round(prob * 100) + '%';
+  return { prob, label: pctLabel, color };
 }
 
 function showXkResult(res) {
@@ -1087,6 +1162,10 @@ async function refreshSelected() {
   renderPreviewTT(allCourses.filter(c => c.selected), '当前已选');
 }
 
+// Track current preview state for interactive removal
+let previewMode = 'selected'; // 'selected' | 'draft' | 'stage'
+let previewDraftIdx = -1;
+
 function renderPreviewTT(courses, label) {
   const el = $('nextthuxk-preview-tt');
   const info = $('nextthuxk-preview-info');
@@ -1094,16 +1173,29 @@ function renderPreviewTT(courses, label) {
   if (!el) return;
   if (info) info.textContent = label || '';
   if (resetBtn) resetBtn.style.display = (label && label !== '当前已选') ? 'inline-block' : 'none';
+  // Determine preview mode
+  previewMode = (label === '当前已选') ? 'selected' : 'stage';
+  if (label && label.startsWith('草稿「')) previewMode = 'draft';
   if (!courses.length) { el.innerHTML = '<div class="nx-st">暂无课程</div>'; return; }
+  // Build grid with course refs for interactive removal
   const tt = {};
-  courses.forEach(c => {
-    const label = c.teacher ? `${c.name}(${c.teacher})` : c.name;
+  courses.forEach((c, ci) => {
+    const lbl = c.teacher ? `${c.name}(${c.teacher})` : c.name;
+    // Get probability color for selected courses
+    let cellColor = '';
+    if (previewMode === 'selected' && c.zy) {
+      const sf = c.typeCode==='006'?'bx':c.typeCode==='008'?'xx':c.typeCode==='007'?'rx':c.typeCode==='ty'?'ty':'bx';
+      const p = calcProb(c, sf, c.zy);
+      if (p.prob >= 0) cellColor = p.color;
+    }
     parseTimeSlots(c.time).forEach(({day, slot}) => {
       if (!tt[day]) tt[day] = {};
+      const entry = {label: lbl, ci, code: c.code, seq: c.seq || '0', color: cellColor};
       if (tt[day][slot]) {
-        const old = typeof tt[day][slot] === 'string' ? tt[day][slot] : tt[day][slot].label;
-        tt[day][slot] = {label: old + ' / ' + label, conflict: true};
-      } else tt[day][slot] = label;
+        const old = tt[day][slot];
+        const labels = (old.conflict ? old.items : [old]).concat(entry);
+        tt[day][slot] = {label: labels.map(e => e.label).join(' / '), conflict: true, items: labels};
+      } else tt[day][slot] = entry;
     });
   });
   const days = ['周一','周二','周三','周四','周五','周六','周日'];
@@ -1116,9 +1208,20 @@ function renderPreviewTT(courses, label) {
     days.forEach(day => {
       const val = tt[day]?.[slot];
       if (val) {
-        const isC = typeof val === 'object' && val.conflict;
-        const text = typeof val === 'string' ? val : val.label||'';
-        h += `<td class="${isC?'nx-c':'nx-s'}" style="font-size:10px">${esc(text)}</td>`;
+        const isC = val.conflict;
+        const text = isC ? val.label : val.label;
+        const items = isC ? val.items : [val];
+        const btns = items.map(it =>
+          `<span class="nx-tt-rm" data-code="${esc(it.code)}" data-seq="${esc(it.seq)}" title="移除 ${esc(it.label)}">✕</span>`
+        ).join('');
+        // Use probability color for non-conflict cells in selected mode
+        let cellClass = isC ? 'nx-c' : 'nx-s';
+        let cellStyle = '';
+        if (!isC && val.color) {
+          const alpha = val.color === '#34c759' ? '.1' : val.color === '#ff9500' ? '.1' : '.1';
+          cellStyle = `background:${val.color}${val.color.startsWith('rgba')?'':alpha};color:${val.color}`;
+        }
+        h += `<td class="${cellClass}" ${cellStyle?`style="${cellStyle}"`:''}><div class="nx-tt-cell"><span class="nx-tt-text">${esc(text)}</span>${btns}</div></td>`;
       } else h += '<td></td>';
     });
     h += '</tr>';
@@ -1127,6 +1230,39 @@ function renderPreviewTT(courses, label) {
   const cr = courses.reduce((s,c) => s + (c.credits||0), 0);
   h += `<div class="nx-st ok" style="margin-top:6px">${courses.length}门课 · ${cr}学分</div>`;
   el.innerHTML = h;
+  // Bind remove buttons
+  el.querySelectorAll('.nx-tt-rm').forEach(btn => {
+    btn.onclick = () => handlePreviewRemove(btn.dataset.code, btn.dataset.seq);
+  });
+}
+
+async function handlePreviewRemove(code, seq) {
+  if (previewMode === 'selected') {
+    const c = allCourses.find(x => x.code === code && String(x.seq||'0') === String(seq));
+    const name = c?.name || code;
+    if (!confirm(`确认退选「${name}」？`)) return;
+    const res = await dropCourse(code, seq);
+    showXkResult(res);
+    if (res.ok) {
+      await launch();
+    }
+  } else if (previewMode === 'stage') {
+    const idx = stageCart.findIndex(s => s.code === code && String(s.seq) === String(seq));
+    const name = idx >= 0 ? stageCart[idx].name : code;
+    if (!confirm(`从暂存区移除「${name}」？`)) return;
+    removeFromStage(idx);
+    renderPreviewTT(stageCart, $('nextthuxk-preview-info')?.textContent || '');
+  } else if (previewMode === 'draft') {
+    const draft = savedDrafts[previewDraftIdx];
+    if (!draft) return;
+    const idx = draft.courses.findIndex(s => s.code === code && String(s.seq) === String(seq));
+    const name = idx >= 0 ? draft.courses[idx].name : code;
+    if (!confirm(`从草稿移除「${name}」？`)) return;
+    draft.courses.splice(idx, 1);
+    await store.set('drafts', savedDrafts);
+    renderDrafts();
+    renderPreviewTT(draft.courses, `草稿「${draft.name}」预览`);
+  }
 }
 
 function renderStageCart() {
@@ -1159,12 +1295,13 @@ function renderDrafts() {
   el.innerHTML = savedDrafts.map((d, i) => {
     const cr = d.courses.reduce((s,c) => s + (c.credits||0), 0);
     const dt = new Date(d.createdAt);
-    return `<div class="nx-draft-card"><div class="nx-draft-head"><span class="nx-draft-name">${esc(d.name)}</span><span class="nx-draft-info">${d.courses.length}门 · ${cr}学分 · ${dt.getMonth()+1}/${dt.getDate()}</span></div><div class="nx-draft-acts"><button class="nx-draft-view" data-idx="${i}">预览</button><button class="nx-draft-go" data-idx="${i}">提交选课</button><button class="nx-draft-export" data-idx="${i}">📤</button><button class="nx-draft-del" data-idx="${i}">删除</button></div></div>`;
+    return `<div class="nx-draft-card"><div class="nx-draft-head"><span class="nx-draft-name">${esc(d.name)}</span><span class="nx-draft-info">${d.courses.length}门 · ${cr}学分 · ${dt.getMonth()+1}/${dt.getDate()}</span></div><div class="nx-draft-acts"><button class="nx-draft-view" data-idx="${i}">预览 & 修改</button><button class="nx-draft-go" data-idx="${i}">提交选课</button><button class="nx-draft-export" data-idx="${i}">📤</button><button class="nx-draft-del" data-idx="${i}">删除</button></div></div>`;
   }).join('');
   el.querySelectorAll('.nx-draft-view').forEach(btn => {
     btn.onclick = () => {
-      const d = savedDrafts[parseInt(btn.dataset.idx)];
-      if (d) renderPreviewTT(d.courses, `草稿「${d.name}」预览`);
+      const idx = parseInt(btn.dataset.idx);
+      const d = savedDrafts[idx];
+      if (d) { previewDraftIdx = idx; renderPreviewTT(d.courses, `草稿「${d.name}」预览`); }
     };
   });
   el.querySelectorAll('.nx-draft-go').forEach(btn => {
@@ -1557,7 +1694,7 @@ function fmtTime(ts) {
   return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-const CUR_VER = '1.0.4';
+const CUR_VER = '1.1.0';
 let updateTimer = null;
 
 function cmpVer(a, b) {
@@ -1780,6 +1917,11 @@ $('nextthuxk-ai').onclick = callAI;
 $('nextthuxk-save-draft').onclick = saveDraft;
 $('nextthuxk-save-selected').onclick = saveSelectedAsDraft;
 $('nextthuxk-export').onclick = exportStageCart;
+$('nextthuxk-preview-stage').onclick = () => {
+  if (!stageCart.length) { showXkResult({ok:false, msg:'暂存区没有课程'}); return; }
+  previewMode = 'stage';
+  renderPreviewTT(stageCart, '暂存区预览');
+};
 $('nextthuxk-import').onclick = () => {
   const area = $('nextthuxk-import-area');
   if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
