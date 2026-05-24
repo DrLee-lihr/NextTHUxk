@@ -1110,7 +1110,6 @@ function calcProb(course, flag, zy) {
   if (flag === 'ty') {
     const vols = parseVolArr(course.volSports);
     if (!vols) return { prob: -1, label: '无数据', color: '#86868b' };
-    if (applicantsAtLevel(vols, zyIdx) === 0) return { prob: 1, label: '100%', color: '#34c759' };
     let rem = cap;
     for (let i = 0; i < zyIdx; i++) rem -= vols[i];
     return probResult(rem, vols[zyIdx]);
@@ -1129,9 +1128,7 @@ function calcProb(course, flag, zy) {
     if (!tv) continue;
     for (let i = 0; i < 3; i++) {
       if (tf === flag && i === zyIdx) {
-        const app = tv[i];
-        if (app === 0) return { prob: 1, label: '100%', color: '#34c759' };
-        return probResult(rem, app);
+        return probResult(rem, tv[i]);
       }
       rem -= tv[i];
     }
@@ -1139,11 +1136,9 @@ function calcProb(course, flag, zy) {
   return { prob: -1, label: '无数据', color: '#86868b' };
 }
 
-function applicantsAtLevel(vols, idx) { return vols[idx] || 0; }
-
 function probResult(rem, applicants) {
-  rem = Math.max(0, rem);
-  const prob = Math.min(1, applicants === 0 ? 1 : rem / applicants);
+  if (rem <= 0) return { prob: 0, label: '0%', color: '#ff3b30' };
+  const prob = applicants === 0 ? 1 : Math.min(1, rem / applicants);
   let color;
   if (prob >= 0.8) color = '#34c759';
   else if (prob >= 0.5) color = '#ff9500';
