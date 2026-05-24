@@ -4,9 +4,7 @@
 
 ## 安装
 
-> **Edge 用户**请使用方式二（解压加载），Edge 会自动删除下载的 .crx 文件。
-
-### 方式一：.crx 一键安装（Chrome / Arc 推荐）
+### 方式一：.crx 拖入安装（Chrome / Arc）
 
 1. 从 [Releases](https://github.com/smartThise/NextTHUxk/releases) 下载 `NextTHUxk.crx`
 2. 浏览器打开 `chrome://extensions`，右上角开启「开发者模式」
